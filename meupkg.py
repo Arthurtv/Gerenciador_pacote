@@ -211,7 +211,7 @@ if __name__ == "__main__":
     elif cmd == "help":
         mostrar_ajuda()
     elif cmd == "self-update":
-        url = "link do github"
+        url = "https://raw.githubusercontent.com/Arthurtv/Gerenciador_pacote/refs/heads/main/meupkg.py"
         try:
             response = requests.get(url)
             response.raise_for_status()
@@ -223,4 +223,5 @@ if __name__ == "__main__":
     else:
         print(f"Comando inválido: '{cmd}'\n")
         mostrar_ajuda()
+
 
