@@ -173,6 +173,7 @@ Gerenciador de Pacotes - Comandos Disponíveis:
   update <arquivo>          Atualiza um pacote com nova versão
   clone <url> [destino]     Clona um repositório Git para a pasta de instalação
   list                      Lista todos os pacotes e repositórios instalados
+  self-update               Atualizar o gerenciador de pacote
   help                      Mostra esta mensagem de ajuda
 
 Exemplos:
@@ -222,3 +223,4 @@ if __name__ == "__main__":
     else:
         print(f"Comando inválido: '{cmd}'\n")
         mostrar_ajuda()
+
