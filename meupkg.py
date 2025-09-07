@@ -8,6 +8,7 @@ import requests
 from urllib.parse import urlparse
 
 DB_PATH = "db.json"
+REPOS_PATH = "repos.json"
 INSTALL_DIR = "./installed/"
 
 def load_db():
@@ -174,6 +175,7 @@ Gerenciador de Pacotes - Comandos Disponíveis:
   clone <url> [destino]     Clona um repositório Git para a pasta de instalação
   list                      Lista todos os pacotes e repositórios instalados
   self-update               Atualizar o gerenciador de pacote
+  add_repo                  Adiciona um repositório Git ao gerenciador
   help                      Mostra esta mensagem de ajuda
 
 Exemplos:
@@ -181,8 +183,49 @@ Exemplos:
   python meupkg.py install https://meusite.com/pkg/app-1.2.art
   python meupkg.py update pacotes/ola-2.0.mpkg.zip
   python meupkg.py clone https://github.com/usuario/repositorio.git
+  python meupkg.py add_repo https://github.com/usuario/repositorio.git
   python meupkg.py remove ola
 """)
+
+def load_repos():
+    if not os.path.exists(REPOS_PATH):
+        return {"repos": []}
+    with open(REPOS_PATH, "r") as f:
+        return json.load(f)
+
+def save_repos(repos):
+    with open(REPOS_PATH, "w") as f:
+        json.dump(repos, f, indent=4)
+
+def add_repo(url):
+    repos = load_repos()
+    if url in repos["repos"]:
+        print("Repositório já adicionado.")
+        return
+    if not verificar_repo(url):
+        print("Repositório inacessível ou inexistente.")
+        return
+    repos["repos"].append(url)
+    save_repos(repos)
+    print("Repositório adicionado com sucesso.")
+
+def remove_repo(url):
+    repos = load_repos()
+    if url not in repos["repos"]:
+        print("Repositório não encontrado.")
+        return
+    repos["repos"].remove(url)
+    save_repos(repos)
+    print("Repositório removido com sucesso.")
+
+def list_repos():
+    repos = load_repos()
+    if not repos["repos"]:
+        print("Nenhum repositório adicionado.")
+        return
+    print("Repositórios adicionados:")
+    for repo in repos["repos"]:
+        print(f"- {repo}")
 
 # Entrada principal
 if __name__ == "__main__":
@@ -223,5 +266,10 @@ if __name__ == "__main__":
     else:
         print(f"Comando inválido: '{cmd}'\n")
         mostrar_ajuda()
-
+if cmd == "add-repo":
+    add_repo(sys.argv[2])
+elif cmd == "remove-repo":
+    remove_repo(sys.argv[2])
+elif cmd == "list-repos":
+    list_repos()
 
