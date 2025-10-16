@@ -242,9 +242,15 @@ if __name__ == "__main__":
         else:
             install(sys.argv[2])
     elif cmd == "remove":
-        remove(sys.argv[2])
+        if len(sys.argv) < 3:
+            print("Uso: python meupkg.py remove <nome>")
+        else:
+            remove(sys.argv[2])
     elif cmd == "update":
-        update(sys.argv[2])
+        if len(sys.argv) < 3:
+            print("Uso: python meupkg.py update <arquivo>")
+        else:
+            update(sys.argv[2])
     elif cmd == "clone":
         if len(sys.argv) == 3:
             clone(sys.argv[2])
@@ -254,6 +260,12 @@ if __name__ == "__main__":
             print("Uso: python meupkg.py clone <url> [destino]")
     elif cmd == "list":
         listar()
+    elif cmd == "add-repo":
+        add_repo(sys.argv[2])
+    elif cmd == "remove-repo":
+        remove_repo(sys.argv[2])
+    elif cmd == "list-repos":
+        list_repos()
     elif cmd == "help":
         mostrar_ajuda()
     elif cmd == "self-update":
@@ -269,11 +281,7 @@ if __name__ == "__main__":
     else:
         print(f"Comando inválido: '{cmd}'\n")
         mostrar_ajuda()
-if cmd == "add-repo":
-    add_repo(sys.argv[2])
-elif cmd == "remove-repo":
-    remove_repo(sys.argv[2])
-elif cmd == "list-repos":
-    list_repos()
+
+
 
 
