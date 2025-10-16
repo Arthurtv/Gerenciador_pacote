@@ -237,7 +237,10 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
 
     if cmd == "install":
-        install(sys.argv[2])
+        if len(sys.argv) < 3:
+            print("Uso: python meupkg.py install <arquivo|url>")
+        else:
+            install(sys.argv[2])
     elif cmd == "remove":
         remove(sys.argv[2])
     elif cmd == "update":
@@ -272,4 +275,5 @@ elif cmd == "remove-repo":
     remove_repo(sys.argv[2])
 elif cmd == "list-repos":
     list_repos()
+
 
