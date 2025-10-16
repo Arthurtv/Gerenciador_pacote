@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 import os
 import zipfile
@@ -6,11 +7,51 @@ import subprocess
 import stat
 import requests
 from urllib.parse import urlparse
+from datetime import datetime
 
+# =========================
+# CONFIGURAÇÕES GERAIS
+# =========================
 DB_PATH = "db.json"
 REPOS_PATH = "repos.json"
 INSTALL_DIR = "./installed/"
 
+# =========================
+# CORES E FORMATAÇÃO
+# =========================
+class Cores:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    CYAN = "\033[36m"
+    MAGENTA = "\033[35m"
+
+def log(msg, tipo="info"):
+    hora = datetime.now().strftime("%H:%M:%S")
+    prefixos = {
+        "info": f"{Cores.CYAN}[INFO {hora}]",
+        "ok": f"{Cores.GREEN}[OK {hora}]",
+        "warn": f"{Cores.YELLOW}[AVISO {hora}]",
+        "erro": f"{Cores.RED}[ERRO {hora}]",
+        "git": f"{Cores.MAGENTA}[GIT {hora}]",
+        "pkg": f"{Cores.BLUE}[PKG {hora}]"
+    }
+    print(f"{prefixos.get(tipo, '[INFO]')} {msg}{Cores.RESET}")
+
+def banner():
+    print(f"""{Cores.BLUE}{Cores.BOLD}
+╔═════════════════════════════════════════════╗
+║         🧩  meupkg - Gerenciador v1.0       ║
+║        Desenvolvido por Arthurtv 💻         ║
+╚═════════════════════════════════════════════╝
+{Cores.RESET}""")
+
+# =========================
+# BANCO DE DADOS
+# =========================
 def load_db():
     if not os.path.exists(DB_PATH):
         return {}
@@ -21,6 +62,9 @@ def save_db(db):
     with open(DB_PATH, "w") as f:
         json.dump(db, f, indent=4)
 
+# =========================
+# INSTALAÇÃO DE PACOTES
+# =========================
 def baixar_arquivo(url, destino):
     try:
         response = requests.get(url, stream=True)
@@ -28,13 +72,16 @@ def baixar_arquivo(url, destino):
         with open(destino, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
+        log(f"Arquivo baixado de {url}", "ok")
         return destino
     except requests.RequestException as e:
-        print(f"Erro ao baixar o arquivo: {e}")
+        log(f"Erro ao baixar o arquivo: {e}", "erro")
         return None
 
 def install(pkgfile):
-    if pkgfile.startswith("http://") or pkgfile.startswith("https://"):
+    log(f"Iniciando instalação de '{pkgfile}'", "pkg")
+
+    if pkgfile.startswith(("http://", "https://")):
         nome_arquivo = os.path.basename(urlparse(pkgfile).path)
         temp_path = os.path.join("temp_downloads", nome_arquivo)
         os.makedirs("temp_downloads", exist_ok=True)
@@ -42,20 +89,20 @@ def install(pkgfile):
         if not pkgfile:
             return
 
-    if not pkgfile.endswith(".mpkg.zip") and not pkgfile.endswith(".art"):
-        print("Formato inválido. Use arquivos .mpkg.zip ou .art")
+    if not pkgfile.endswith((".mpkg.zip", ".art")):
+        log("Formato inválido. Use arquivos .mpkg.zip ou .art", "erro")
         return
 
     base_name = os.path.basename(pkgfile).replace(".mpkg.zip", "").replace(".art", "")
     try:
         name, version = base_name.split("-")
     except ValueError:
-        print("Nome do arquivo inválido. Use o formato nome-versao.mpkg.zip ou .art")
+        log("Nome inválido. Use nome-versao.mpkg.zip", "erro")
         return
 
     install_path = os.path.join(INSTALL_DIR, name)
     if os.path.exists(install_path):
-        print("Pacote já instalado.")
+        log("Pacote já instalado.", "warn")
         return
 
     os.makedirs(install_path, exist_ok=True)
@@ -63,7 +110,7 @@ def install(pkgfile):
         with zipfile.ZipFile(pkgfile, 'r') as zip_ref:
             zip_ref.extractall(install_path)
     except zipfile.BadZipFile:
-        print("Erro: o arquivo não é um ZIP válido.")
+        log("Erro: o arquivo não é um ZIP válido.", "erro")
         return
 
     db = load_db()
@@ -73,8 +120,11 @@ def install(pkgfile):
         "path": install_path
     }
     save_db(db)
-    print(f"Pacote '{name}' instalado com sucesso.")
+    log(f"Pacote '{name}' instalado com sucesso!", "ok")
 
+# =========================
+# REMOVER PACOTES
+# =========================
 def handle_remove_readonly(func, path, exc_info):
     os.chmod(path, stat.S_IWRITE)
     func(path)
@@ -82,38 +132,43 @@ def handle_remove_readonly(func, path, exc_info):
 def remove(pkgname):
     db = load_db()
     if pkgname not in db:
-        print("Pacote ou repositório não está instalado.")
+        log("Pacote ou repositório não encontrado.", "erro")
         return
 
     path = db[pkgname]["path"]
 
     if os.path.exists(path):
         shutil.rmtree(path, onerror=handle_remove_readonly)
-        print(f"Pasta '{path}' removida.")
+        log(f"Pasta '{path}' removida.", "ok")
     else:
-        print(f"Pasta '{path}' não encontrada, removendo apenas do banco.")
+        log(f"Pasta '{path}' não encontrada, removendo do banco.", "warn")
 
     del db[pkgname]
     save_db(db)
-    print(f"'{pkgname}' removido do banco de dados.")
+    log(f"'{pkgname}' removido do sistema.", "ok")
 
+# =========================
+# ATUALIZAR PACOTE
+# =========================
 def update(pkgfile):
+    log(f"Atualizando {pkgfile}...", "pkg")
     name_ver = os.path.basename(pkgfile).replace(".mpkg.zip", "").replace(".art", "")
     try:
         name, version = name_ver.split("-")
     except ValueError:
-        print("Nome do arquivo inválido. Use o formato nome-versao.mpkg.zip")
+        log("Nome inválido. Use nome-versao.mpkg.zip", "erro")
         return
     db = load_db()
     if name not in db:
-        print("Pacote não instalado, usando 'install'.")
+        log("Pacote não instalado. Instalando novo...", "warn")
         install(pkgfile)
     else:
-        print("Removendo versão antiga...")
         remove(name)
-        print("Instalando nova versão...")
         install(pkgfile)
 
+# =========================
+# REPOSITÓRIOS GIT
+# =========================
 def verificar_repo(url):
     try:
         subprocess.run(["git", "ls-remote", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -127,15 +182,15 @@ def clone(repo_url, destino=None):
     destino = os.path.join(INSTALL_DIR, destino)
 
     if os.path.exists(destino):
-        print("Repositório já existe.")
+        log("Repositório já existe.", "warn")
         return
-    
+
     if not verificar_repo(repo_url):
-        print("Repositório inacessível ou inexistente.")
+        log("Repositório inacessível ou inexistente.", "erro")
         return
 
     try:
-        print(f"Clonando {repo_url} em {destino}...")
+        log(f"Clonando {repo_url} em {destino}...", "git")
         subprocess.run(['git', 'clone', repo_url, destino], check=True)
 
         db = load_db()
@@ -147,46 +202,55 @@ def clone(repo_url, destino=None):
         }
         save_db(db)
 
-        print("Clonagem concluída e registrada no banco de dados!")
+        log("Clonagem concluída e registrada no banco de dados!", "ok")
     except subprocess.CalledProcessError as e:
-        print(f"Erro ao clonar: {e}")
+        log(f"Erro ao clonar: {e}", "erro")
 
+# =========================
+# LISTAGEM
+# =========================
 def listar():
     db = load_db()
     if not db:
-        print("Nenhum pacote ou repositório instalado.")
+        log("Nenhum pacote ou repositório instalado.", "warn")
         return
 
-    print("Itens registrados no sistema:\n")
+    print(f"\n{Cores.BOLD}{Cores.CYAN}Itens instalados:{Cores.RESET}")
     for name, info in db.items():
         tipo = info.get("type", "package")
         if tipo == "git":
-            print(f"[GIT] {name} -> {info['url']}")
+            print(f"  🔗 {Cores.MAGENTA}[GIT]{Cores.RESET} {name} -> {info['url']}")
         else:
-            print(f"[PKG] {name} -> versão {info.get('version', 'desconhecida')}")
+            print(f"  📦 {Cores.BLUE}[PKG]{Cores.RESET} {name} -> versão {info.get('version', 'desconhecida')}")
+    print()
 
+# =========================
+# AJUDA
+# =========================
 def mostrar_ajuda():
-    print("""
-Gerenciador de Pacotes - Comandos Disponíveis:
-
-  install <arquivo|url>     Instala um pacote .mpkg.zip ou .art (local ou por URL)
-  remove <nome>             Remove um pacote ou repositório instalado
-  update <arquivo>          Atualiza um pacote com nova versão
-  clone <url> [destino]     Clona um repositório Git para a pasta de instalação
-  list                      Lista todos os pacotes e repositórios instalados
-  self-update               Atualizar o gerenciador de pacote
-  add_repo                  Adiciona um repositório Git ao gerenciador
-  help                      Mostra esta mensagem de ajuda
-
+    print(f"""{Cores.BOLD}{Cores.YELLOW}
+Comandos disponíveis:
+─────────────────────────────────────{Cores.RESET}
+  install <arquivo|url>   → Instala um pacote .mpkg.zip ou .art
+  remove <nome>           → Remove um pacote instalado
+  update <arquivo>        → Atualiza um pacote
+  clone <url> [destino]   → Clona um repositório Git
+  list                    → Lista pacotes instalados
+  add-repo <url>          → Adiciona um repositório
+  remove-repo <url>       → Remove um repositório
+  list-repos              → Mostra todos os repositórios
+  self-update             → Atualiza o gerenciador
+  help                    → Mostra esta ajuda
+─────────────────────────────────────
 Exemplos:
-  python meupkg.py install pacotes/ola-1.0.mpkg.zip
-  python meupkg.py install https://meusite.com/pkg/app-1.2.art
-  python meupkg.py update pacotes/ola-2.0.mpkg.zip
-  python meupkg.py clone https://github.com/usuario/repositorio.git
-  python meupkg.py add_repo https://github.com/usuario/repositorio.git
-  python meupkg.py remove ola
-""")
+  meupkg install ola-1.0.mpkg.zip
+  meupkg install https://meusite.com/pkg/app-1.2.art
+  meupkg clone https://github.com/user/repo.git
+{Cores.RESET}""")
 
+# =========================
+# MULTI-REPO SYSTEM
+# =========================
 def load_repos():
     if not os.path.exists(REPOS_PATH):
         return {"repos": []}
@@ -200,88 +264,74 @@ def save_repos(repos):
 def add_repo(url):
     repos = load_repos()
     if url in repos["repos"]:
-        print("Repositório já adicionado.")
+        log("Repositório já adicionado.", "warn")
         return
     if not verificar_repo(url):
-        print("Repositório inacessível ou inexistente.")
+        log("Repositório inacessível ou inexistente.", "erro")
         return
     repos["repos"].append(url)
     save_repos(repos)
-    print("Repositório adicionado com sucesso.")
+    log("Repositório adicionado com sucesso.", "ok")
 
 def remove_repo(url):
     repos = load_repos()
     if url not in repos["repos"]:
-        print("Repositório não encontrado.")
+        log("Repositório não encontrado.", "erro")
         return
     repos["repos"].remove(url)
     save_repos(repos)
-    print("Repositório removido com sucesso.")
+    log("Repositório removido com sucesso.", "ok")
 
 def list_repos():
     repos = load_repos()
     if not repos["repos"]:
-        print("Nenhum repositório adicionado.")
+        log("Nenhum repositório adicionado.", "warn")
         return
-    print("Repositórios adicionados:")
+    print(f"\n{Cores.BOLD}{Cores.CYAN}Repositórios registrados:{Cores.RESET}")
     for repo in repos["repos"]:
-        print(f"- {repo}")
+        print(f"  🔗 {repo}")
+    print()
 
-# Entrada principal
+# =========================
+# EXECUÇÃO PRINCIPAL
+# =========================
 if __name__ == "__main__":
     import sys
+    banner()
     if len(sys.argv) < 2:
         mostrar_ajuda()
         sys.exit(1)
 
     cmd = sys.argv[1]
 
-    if cmd == "install":
-        if len(sys.argv) < 3:
-            print("Uso: python meupkg.py install <arquivo|url>")
-        else:
+    try:
+        if cmd == "install":
             install(sys.argv[2])
-    elif cmd == "remove":
-        if len(sys.argv) < 3:
-            print("Uso: python meupkg.py remove <nome>")
-        else:
+        elif cmd == "remove":
             remove(sys.argv[2])
-    elif cmd == "update":
-        if len(sys.argv) < 3:
-            print("Uso: python meupkg.py update <arquivo>")
-        else:
+        elif cmd == "update":
             update(sys.argv[2])
-    elif cmd == "clone":
-        if len(sys.argv) == 3:
-            clone(sys.argv[2])
-        elif len(sys.argv) == 4:
-            clone(sys.argv[2], sys.argv[3])
-        else:
-            print("Uso: python meupkg.py clone <url> [destino]")
-    elif cmd == "list":
-        listar()
-    elif cmd == "add-repo":
-        add_repo(sys.argv[2])
-    elif cmd == "remove-repo":
-        remove_repo(sys.argv[2])
-    elif cmd == "list-repos":
-        list_repos()
-    elif cmd == "help":
-        mostrar_ajuda()
-    elif cmd == "self-update":
-        url = "https://raw.githubusercontent.com/Arthurtv/Gerenciador_pacote/refs/heads/main/meupkg.py"
-        try:
+        elif cmd == "clone":
+            clone(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
+        elif cmd == "list":
+            listar()
+        elif cmd == "add-repo":
+            add_repo(sys.argv[2])
+        elif cmd == "remove-repo":
+            remove_repo(sys.argv[2])
+        elif cmd == "list-repos":
+            list_repos()
+        elif cmd == "self-update":
+            url = "https://raw.githubusercontent.com/Arthurtv/Gerenciador_pacote/main/meupkg.py"
             response = requests.get(url)
             response.raise_for_status()
             with open(__file__, "wb") as f:
                 f.write(response.content)
-            print("Gerenciador de pacotes atualizado com sucesso!")
-        except Exception as e:
-            print(f"Erro ao atualizar: {e}")
-    else:
-        print(f"Comando inválido: '{cmd}'\n")
-        mostrar_ajuda()
-
-
-
-
+            log("Gerenciador atualizado com sucesso!", "ok")
+        elif cmd == "help":
+            mostrar_ajuda()
+        else:
+            log(f"Comando inválido: '{cmd}'", "erro")
+            mostrar_ajuda()
+    except IndexError:
+        log("Argumento ausente. Use 'help' para mais informações.", "erro")
